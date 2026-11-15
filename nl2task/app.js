@@ -1,4 +1,10 @@
+const bootError = document.querySelector("#boot-error");
 const bench = globalThis.NL2Task;
+if (!bench) {
+  bootError.hidden = false;
+  throw new Error("engine.js 没有加载");
+}
+bootError.hidden = true;
 
 const examples = [
   "在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2",
@@ -72,17 +78,17 @@ for (const example of examples) {
   button.textContent = example;
   button.addEventListener("click", () => {
     input.value = example;
-    render();
+    render({ scroll: true });
   });
   exampleBox.append(button);
 }
 
-document.querySelector("#run").addEventListener("click", render);
+document.querySelector("#run").addEventListener("click", () => render({ scroll: true }));
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) render();
 });
 
-function render() {
+function render(options = {}) {
   const outcome = bench.runAll(input.value);
   slots.hidden = false;
   slots.replaceChildren();
@@ -156,6 +162,7 @@ function render() {
     card.append(table);
     results.append(card);
   }
+  if (options.scroll) results.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 render();

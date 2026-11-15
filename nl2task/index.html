@@ -15,6 +15,20 @@
         </p>
       </header>
 
+      <p id="boot-error" class="boot-error">
+        生成按钮要和 engine.js、app.js、styles.css 放在同一个文件夹里才会工作。只把这个网页另存到本地时，点击没有反应。请下载整个 nl2task 文件夹，解压后双击其中的 index.html。
+      </p>
+
+      <section class="ask">
+        <label for="nl">只输入自然语言</label>
+        <textarea id="nl" rows="3">在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2</textarea>
+        <div class="examples" id="examples"></div>
+        <button id="run" type="button">生成</button>
+      </section>
+
+      <section id="slots" class="slots" hidden></section>
+      <section id="results" class="results"></section>
+
       <section class="libraries">
         <article>
           <h2 id="steps-heading">步骤库</h2>
@@ -27,16 +41,6 @@
           <ul id="apis"></ul>
         </article>
       </section>
-
-      <section class="ask">
-        <label for="nl">只输入自然语言</label>
-        <textarea id="nl" rows="3">在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2</textarea>
-        <div class="examples" id="examples"></div>
-        <button id="run" type="button">生成</button>
-      </section>
-
-      <section id="slots" class="slots" hidden></section>
-      <section id="results" class="results"></section>
     </main>
     <script src="./engine.js"></script>
     <script src="./app.js"></script>

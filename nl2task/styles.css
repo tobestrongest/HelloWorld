@@ -39,6 +39,14 @@ article, .ask, .slots, .result {
 
 .ask { margin-top: 16px; }
 
+.boot-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+}
+
 label { display: block; font-weight: 600; margin-bottom: 8px; }
 
 textarea {
