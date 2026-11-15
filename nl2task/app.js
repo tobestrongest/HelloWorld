@@ -1,11 +1,11 @@
 const bench = globalThis.NL2Task;
 
 const examples = [
-  "建一个叫 Love Coldplay 的歌单，放入 Coldplay 最热门的歌",
-  "查一下周杰伦的热门歌曲",
-  "建一个叫通勤的歌单",
-  "放入 Coldplay 最热门的歌",
-  "看一下专辑 Abbey Road 里的歌",
+  "在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2",
+  "把 Region R1 的权重改成 0.5",
+  "把优化器换成 L-BFGS，迭代 40 次",
+  "跑一轮 PS，目标是线性",
+  "删掉器件 D1 在 25 度的异常数据",
   "今天天气怎么样",
 ];
 
@@ -16,15 +16,21 @@ const exampleBox = document.querySelector("#examples");
 const slots = document.querySelector("#slots");
 const results = document.querySelector("#results");
 
+document.querySelector("#steps-heading").textContent = `步骤库（${bench.stepLibrary.length}）`;
+const resolveCount = bench.apiLibrary.filter((item) => item.kind === "resolve").length;
+const actionCount = bench.apiLibrary.length - resolveCount;
+document.querySelector("#apis-heading").textContent = `API 库（动作 ${actionCount}，解析 ${resolveCount}）`;
+
 for (const step of bench.stepLibrary) {
   const item = document.createElement("li");
   const title = document.createElement("code");
   title.textContent = step.id;
   const summary = document.createElement("div");
-  summary.textContent = `${step.summary}。${step.when}。`;
+  summary.textContent = `${step.summary}。${step.when}。mapping_status=${step.mappingStatus}，allowed_flows=${step.allowedFlows.join("、")}。`;
   const apisUsed = document.createElement("div");
   apisUsed.className = "sig";
-  apisUsed.textContent = step.apis.join(" → ");
+  const writes = step.writes.map((write) => `${write.object}.${write.field}`).join(", ");
+  apisUsed.textContent = `${step.apis.join(" → ")}\n写入 ${writes}`;
   item.append(title, summary, apisUsed);
   steps.append(item);
 }
@@ -32,10 +38,18 @@ for (const step of bench.stepLibrary) {
 for (const api of bench.apiLibrary) {
   const item = document.createElement("li");
   const title = document.createElement("code");
-  const args = api.params.map((param) => `${param.name}: ${param.type}${param.required ? "" : "?"}`).join(", ");
+  const args = api.params
+    .map((param) => {
+      const type = param.values.length ? `enum[${param.values.join("|")}]` : param.type;
+      return `${param.name}: ${type}${param.required ? "" : "?"}`;
+    })
+    .join(", ");
   title.textContent = `${api.id}(${args})`;
   const summary = document.createElement("div");
-  summary.textContent = api.summary;
+  const flags = [api.kind === "resolve" ? "解析" : "动作"];
+  if (api.destructive) flags.push("destructive");
+  if (api.confirmRequired) flags.push("confirm_required");
+  summary.textContent = `${flags.join(" · ")}。${api.summary}`;
   const origin = document.createElement("div");
   origin.className = "sig";
   origin.textContent =
@@ -124,6 +138,12 @@ function render() {
       name.textContent = call.api;
       const args = document.createElement("td");
       if (call.params.length === 0) args.textContent = "无参数";
+      if (call.confirmRequired) {
+        const note = document.createElement("div");
+        note.className = "missing";
+        note.textContent = "destructive，需要确认。这一步只留在列表里。";
+        args.append(note);
+      }
       call.params.forEach((param) => {
         const line = document.createElement("div");
         line.textContent = `${param.name}=${param.value} · ${param.source}`;

@@ -11,26 +11,26 @@
       <header>
         <h1>自然语言到 API 列表</h1>
         <p>
-          同一句话、同一套模拟库，走三种方案。程序停在 API 列表，不发真实请求。匹配规则是写死的，用来看清过程，不是一个可用的自然语言理解器。
+          步骤库用的是 steps.yaml。API 库按其中的 action_handler、参数和 writes 生成，引用类型再生成解析 API。同一句话走三种方案，程序停在 API 列表，不发真实请求。步骤是否命中靠写死的关键词。
         </p>
       </header>
 
       <section class="libraries">
         <article>
-          <h2>步骤库</h2>
-          <p class="hint">一个步骤对应哪几个 API。</p>
+          <h2 id="steps-heading">步骤库</h2>
+          <p class="hint">内容来自 steps.yaml。每一步只展开自己的 action_handler。</p>
           <ul id="steps"></ul>
         </article>
         <article>
-          <h2>API 库</h2>
-          <p class="hint">每个 API 的签名，以及参数值从哪里来。</p>
+          <h2 id="apis-heading">API 库</h2>
+          <p class="hint">动作 API 照抄步骤。引用参数改为取解析 API 的返回值，字面量来自原话。</p>
           <ul id="apis"></ul>
         </article>
       </section>
 
       <section class="ask">
         <label for="nl">只输入自然语言</label>
-        <textarea id="nl" rows="3">建一个叫 Love Coldplay 的歌单，放入 Coldplay 最热门的歌</textarea>
+        <textarea id="nl" rows="3">在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2</textarea>
         <div class="examples" id="examples"></div>
         <button id="run" type="button">生成</button>
       </section>

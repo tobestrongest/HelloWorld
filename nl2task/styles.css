@@ -69,6 +69,7 @@ button, .examples button {
 }
 
 ul { list-style: none; padding: 0; margin: 12px 0 0; }
+.libraries ul { max-height: 320px; overflow: auto; padding-right: 8px; }
 li + li { margin-top: 10px; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
 
