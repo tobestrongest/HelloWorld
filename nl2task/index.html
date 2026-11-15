@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>自然语言到 API 列表</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>自然语言到 API 列表</h1>
+        <p>
+          同一句话、同一套模拟库，走三种方案。程序停在 API 列表，不发真实请求。匹配规则是写死的，用来看清过程，不是一个可用的自然语言理解器。
+        </p>
+      </header>
+
+      <section class="libraries">
+        <article>
+          <h2>步骤库</h2>
+          <p class="hint">一个步骤对应哪几个 API。</p>
+          <ul id="steps"></ul>
+        </article>
+        <article>
+          <h2>API 库</h2>
+          <p class="hint">每个 API 的签名，以及参数值从哪里来。</p>
+          <ul id="apis"></ul>
+        </article>
+      </section>
+
+      <section class="ask">
+        <label for="nl">只输入自然语言</label>
+        <textarea id="nl" rows="3">建一个叫 Love Coldplay 的歌单，放入 Coldplay 最热门的歌</textarea>
+        <div class="examples" id="examples"></div>
+        <button id="run" type="button">生成</button>
+      </section>
+
+      <section id="slots" class="slots" hidden></section>
+      <section id="results" class="results"></section>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
