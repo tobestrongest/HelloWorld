@@ -115,7 +115,7 @@ async function render(options = {}) {
     showStatus(failure ? payload.replies[0].error : model ? `三次请求已返回，模型 ${model}。` : "三次请求已返回。");
   } catch (error) {
     results.replaceChildren();
-    showStatus(error.message === "Failed to fetch" ? "没有连上本机服务。请先运行 node server.js，再打开 http://127.0.0.1:8765/ 。" : error.message);
+    showStatus(error.message === "Failed to fetch" ? "没有连上本机服务。请先运行 node server.js 8876，再打开启动时打印的地址。" : error.message);
   } finally {
     runButton.disabled = false;
     runButton.textContent = previous;

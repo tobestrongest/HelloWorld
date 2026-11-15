@@ -3,7 +3,20 @@ const http = require("node:http");
 const path = require("node:path");
 
 const root = __dirname;
-const port = Number(process.env.PORT || 8765);
+
+function chosenPort() {
+  const args = process.argv.slice(2);
+  const flag = args.indexOf("--port");
+  const raw = flag >= 0 ? args[flag + 1] : args.find((arg) => /^\d+$/.test(arg));
+  const value = Number(raw || process.env.PORT || 8765);
+  if (!Number.isInteger(value) || value < 1 || value > 65535) {
+    console.error("端口无效。用法：node server.js 8876");
+    process.exit(1);
+  }
+  return value;
+}
+
+const port = chosenPort();
 
 function llmConfig() {
   const key = process.env.LLM_API_KEY || process.env.XAI_API_KEY || process.env.OPENAI_API_KEY || "";
@@ -128,6 +141,14 @@ const server = http.createServer(async (request, response) => {
   } catch (error) {
     send(response, 500, JSON.stringify({ error: error.message }), "application/json; charset=utf-8");
   }
+});
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(`${port} 已被占用。换一个端口：node server.js 8876`);
+    process.exit(1);
+  }
+  throw error;
 });
 
 server.listen(port, "127.0.0.1", () => {
