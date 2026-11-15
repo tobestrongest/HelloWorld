@@ -11,12 +11,12 @@
       <header>
         <h1>自然语言到 API 列表</h1>
         <p>
-          步骤库用的是 steps.yaml。API 库只收录这些步骤的 action_handler。同一句话走三种方案，程序停在 API 列表，不发真实请求。步骤是否命中靠写死的关键词。
+          步骤库用的是 steps.yaml。API 库只收录这些步骤的 action_handler。点生成后，三种方案各向模型发一次请求。程序只保留库里有的名称，并停在 API 列表。
         </p>
       </header>
 
       <p id="boot-error" class="boot-error">
-        生成按钮要和 engine.js、app.js、styles.css 放在同一个文件夹里才会工作。只把这个网页另存到本地时，点击没有反应。请下载整个 nl2task 文件夹，解压后双击其中的 index.html。
+        模型调用由本机服务转发。在 nl2task 目录先设置 LLM_API_KEY 和 LLM_BASE_URL，再执行 node server.js，然后打开 http://127.0.0.1:8765/ 。只双击这个网页不会发出请求。密钥放在环境变量里，不要写进文件。
       </p>
 
       <section class="ask">

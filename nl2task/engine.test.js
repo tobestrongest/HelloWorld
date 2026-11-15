@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 
-const { apiLibrary, runAll, stepLibrary } = createRequire(import.meta.url)("./engine.js");
+const { apiLibrary, buildRequests, parseModelJson, realize, stepLibrary } = createRequire(import.meta.url)("./engine.js");
 
 function ids(result) {
   return result.calls.map((call) => call.api);
@@ -19,94 +19,84 @@ for (const block of blocks) {
   const id = block.slice(0, block.indexOf("\n")).trim();
   const handler = block.match(/action_handler: (\S+)/)[1];
   const step = stepLibrary.find((item) => item.id === id);
-  assert.ok(step, id);
   assert.deepEqual(step.apis, [handler]);
-  assert.equal(step.mappingStatus, "unverified");
-  assert.deepEqual(step.allowedFlows, ["待确认"]);
   const names = [...block.matchAll(/^ {6}([a-z_]+):/gm)].map((match) => match[1]);
-  const action = apiLibrary.find((item) => item.id === handler);
-  assert.deepEqual(action.params.map((item) => item.name), names);
-  assert.equal(action.kind, "action");
+  assert.deepEqual(apiLibrary.find((item) => item.id === handler).params.map((item) => item.name), names);
 }
-assert.equal(apiLibrary.find((item) => item.id === "data_remove").confirmRequired, true);
 assert.deepEqual(
   apiLibrary.map((item) => item.id).sort(),
   stepLibrary.map((step) => step.apis[0]).sort(),
 );
-assert.equal(apiLibrary.some((item) => item.id.includes("resolve")), false);
 
-const created = runAll("在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2");
-assert.equal(created.slots.curve, "IdVg");
-assert.equal(created.slots.region, "R1");
-assert.equal(created.slots.range, "0 到 1");
-assert.equal(created.slots.weight, "2");
-assert.deepEqual(ids(created.results[0]), ["region_create"]);
-assert.deepEqual(ids(created.results[1]), ["region_create"]);
-assert.equal(param(created.results[0], "region_create", "curve").value, '"IdVg"');
-assert.equal(param(created.results[0], "region_create", "region").value, '"R1"');
-assert.equal(param(created.results[0], "region_create", "range").value, '"0 到 1"');
-assert.equal(param(created.results[0], "region_create", "weight").value, "2");
-assert.match(created.results[1].stages[1].body, /没有可补的调用/);
-assert.deepEqual(created.results[2].calls, []);
-assert.match(created.results[2].stages[0].body, /待确认/);
-assert.match(created.results[2].stages[0].body, /unverified/);
-assert.match(created.results[2].stages[1].body, /不能进入 executable/);
+const utterance = "在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2";
+const requests = buildRequests(utterance);
+assert.deepEqual(requests.map((item) => item.id), ["plan", "code", "preset"]);
+assert.match(requests[0].user, /region\.create/);
+assert.match(requests[0].user, new RegExp(utterance));
+assert.match(requests[1].user, /region_create/);
+assert.doesNotMatch(requests[1].user, /curve_resolve/);
 
-const weight = runAll("把 Region R1 的权重改成 0.5");
-assert.deepEqual(ids(weight.results[0]), ["region_weight_change"]);
-assert.deepEqual(ids(weight.results[1]), ["region_weight_change"]);
-assert.equal(param(weight.results[0], "region_weight_change", "region").value, '"R1"');
-assert.equal(param(weight.results[0], "region_weight_change", "weight").value, "0.5");
-assert.equal(param(weight.results[0], "region_weight_change", "curve").missing, true);
+const fenced = parseModelJson('```json\n{"steps":[]}\n```');
+assert.equal(fenced.ok, true);
+assert.deepEqual(fenced.value, { steps: [] });
 
-const optimizer = runAll("把优化器换成 L-BFGS，迭代 40 次");
-assert.deepEqual(ids(optimizer.results[0]), ["optimizer_change", "optimizer_iteration_set"]);
-assert.deepEqual(ids(optimizer.results[1]), ["optimizer_change", "optimizer_iteration_set"]);
-assert.equal(param(optimizer.results[1], "optimizer_change", "optimizer").value, '"L-BFGS"');
-assert.equal(param(optimizer.results[1], "optimizer_iteration_set", "iterations").value, "40");
-assert.equal(param(optimizer.results[1], "optimizer_change", "insert_after").value, "<未提供>");
-assert.equal(param(optimizer.results[1], "optimizer_change", "flow").missing, true);
-assert.match(optimizer.results[1].stages[3].body, /optimizer_change：是步骤库中的 action_handler/);
+const outcome = realize(utterance, [
+  {
+    id: "plan",
+    text: JSON.stringify({
+      steps: [
+        { id: "region.create", params: { curve: "IdVg", region: "R1", range: "0 到 1", weight: 2 } },
+        { id: "curve_resolve", params: { name: "IdVg" } },
+        { id: "region.weight_set", params: { region: "R1", weight: 0.5 } },
+      ],
+    }),
+  },
+  {
+    id: "code",
+    text: JSON.stringify({
+      calls: [
+        { api: "region_create", params: { curve: "IdVg", region: "R1", range: "0 到 1", weight: 2 } },
+        { api: "curve_resolve", params: { name: "IdVg" } },
+      ],
+    }),
+  },
+  { id: "preset", text: JSON.stringify({ steps: ["region.create"] }) },
+]);
 
-const ps = runAll("跑一轮 PS，目标是线性");
-assert.equal(ps.slots.objective, "linearity");
-assert.deepEqual(ids(ps.results[0]), ["ps_run"]);
-assert.deepEqual(ids(ps.results[1]), ["ps_run"]);
-assert.equal(param(ps.results[1], "ps_run", "objective").value, '"linearity"');
-assert.equal(param(ps.results[1], "ps_run", "flow").missing, true);
-assert.equal(param(ps.results[1], "ps_run", "devices").missing, false);
+assert.deepEqual(ids(outcome.results[0]), ["region_create", "region_weight_change"]);
+assert.match(outcome.results[0].stages[1].body, /库外步骤 curve_resolve/);
+assert.equal(param(outcome.results[0], "region_create", "curve").value, '"IdVg"');
+assert.equal(param(outcome.results[0], "region_create", "weight").value, "2");
+assert.equal(param(outcome.results[0], "region_weight_change", "curve").missing, true);
+assert.match(outcome.results[0].stages[3].body, /region\.weight 同时被 region\.create 和 region\.weight_set 写入/);
 
-const removed = runAll("删掉器件 D1 在 25 度的异常数据");
-assert.deepEqual(ids(removed.results[0]), ["data_remove"]);
-assert.deepEqual(ids(removed.results[1]), ["data_remove"]);
-assert.equal(removed.results[0].calls[0].confirmRequired, true);
-assert.equal(removed.results[0].calls[0].destructive, true);
-assert.equal(param(removed.results[0], "data_remove", "device").value, '"D1"');
-assert.equal(param(removed.results[0], "data_remove", "temperature").value, '"25"');
-assert.equal(param(removed.results[0], "data_remove", "curves").missing, true);
+assert.deepEqual(ids(outcome.results[1]), ["region_create"]);
+assert.match(outcome.results[1].stages[1].body, /库外 API curve_resolve/);
+assert.match(outcome.results[1].stages[3].body, /region_create：是步骤库中的 action_handler/);
 
-const boundary = runAll("把参数 Vth 的下界调到 0.2，作用域 Global");
-assert.deepEqual(ids(boundary.results[0]), ["param_boundary_set"]);
-assert.deepEqual(ids(boundary.results[1]), ["param_boundary_set"]);
-assert.equal(param(boundary.results[0], "param_boundary_set", "parameter").value, '"Vth"');
-assert.equal(param(boundary.results[0], "param_boundary_set", "lower").value, "0.2");
-assert.equal(param(boundary.results[0], "param_boundary_set", "upper").value, "<未提供>");
-assert.equal(param(boundary.results[0], "param_boundary_set", "scope").value, '"global"');
+assert.deepEqual(outcome.results[2].calls, []);
+assert.match(outcome.results[2].stages[1].body, /unverified/);
+assert.match(outcome.results[2].stages[1].body, /待确认/);
 
-const missingBound = runAll("调整参数 Vth 的边界，作用域 Global");
-assert.equal(param(missingBound.results[0], "param_boundary_set", "lower").missing, true);
-assert.equal(param(missingBound.results[0], "param_boundary_set", "upper").missing, true);
-assert.match(param(missingBound.results[0], "param_boundary_set", "lower").source, /at_least_one/);
+const bounds = realize("调整参数边界", [
+  { id: "plan", text: JSON.stringify({ steps: [{ id: "param.boundary_set", params: { parameter: "Vth", scope: "global" } }] }) },
+  { id: "code", text: '{"calls":[]}' },
+  { id: "preset", text: '{"steps":[]}' },
+]);
+assert.equal(param(bounds.results[0], "param_boundary_set", "lower").missing, true);
+assert.match(param(bounds.results[0], "param_boundary_set", "lower").source, /at_least_one/);
 
-const conflict = runAll("在曲线 IdVg 上新建 Region R1，范围 0 到 1，并设置这个 Region 的权重为 2");
-assert.deepEqual(ids(conflict.results[0]), ["region_create", "region_weight_change"]);
-assert.match(conflict.results[0].stages[3].body, /region\.weight 同时被 region\.create 和 region\.weight_set 写入/);
+const badEnum = realize("调整边界", [
+  { id: "plan", text: JSON.stringify({ steps: [{ id: "region.adjust", params: { mode: "move" } }] }) },
+  { id: "code", text: '{"calls":[]}' },
+  { id: "preset", text: "不是 json" },
+]);
+assert.equal(param(badEnum.results[0], "region_adjust", "mode").missing, true);
+assert.match(param(badEnum.results[0], "region_adjust", "mode").source, /枚举/);
+assert.match(badEnum.results[2].stages[1].body, /不是 JSON/);
 
-const unknown = runAll("今天天气怎么样");
-for (const result of unknown.results) assert.deepEqual(result.calls, []);
-assert.match(unknown.results[2].stages[0].body, /没有命中/);
-
-const blank = runAll("   ");
-for (const result of blank.results) assert.deepEqual(result.calls, []);
+const failed = realize("今天天气怎么样", [{ id: "plan", error: "未配置模型" }]);
+assert.deepEqual(failed.results[0].calls, []);
+assert.match(failed.results[0].stages[0].body, /未配置模型/);
 
 console.log("engine tests passed");

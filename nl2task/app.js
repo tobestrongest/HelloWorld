@@ -30,7 +30,7 @@ for (const step of bench.stepLibrary) {
   const title = document.createElement("code");
   title.textContent = step.id;
   const summary = document.createElement("div");
-  summary.textContent = `${step.summary}。${step.when}。mapping_status=${step.mappingStatus}，allowed_flows=${step.allowedFlows.join("、")}。`;
+  summary.textContent = `${step.summary}。mapping_status=${step.mappingStatus}，allowed_flows=${step.allowedFlows.join("、")}。`;
   const apisUsed = document.createElement("div");
   apisUsed.className = "sig";
   const writes = step.writes.map((write) => `${write.object}.${write.field}`).join(", ");
@@ -81,19 +81,48 @@ for (const example of examples) {
   exampleBox.append(button);
 }
 
-document.querySelector("#run").addEventListener("click", () => render({ scroll: true }));
+const runButton = document.querySelector("#run");
+runButton.addEventListener("click", () => render({ scroll: true }));
 input.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) render();
+  if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) render({ scroll: true });
 });
 
-function render(options = {}) {
-  const outcome = bench.runAll(input.value);
+function showStatus(text) {
   slots.hidden = false;
   slots.replaceChildren();
   const label = document.createElement("strong");
-  label.textContent = "从原话识别出";
-  slots.append(label, document.createTextNode(outcome.slotText));
+  label.textContent = "状态";
+  slots.append(label, document.createTextNode(text));
+}
 
+async function render(options = {}) {
+  if (runButton.disabled) return;
+  runButton.disabled = true;
+  const previous = runButton.textContent;
+  runButton.textContent = "生成中";
+  showStatus("正在分别请求模型：规划、代码、预定义流程。");
+  try {
+    const response = await fetch("/api/llm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: bench.buildRequests(input.value) }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "模型请求失败");
+    paint(bench.realize(input.value, payload.replies), options);
+    const failure = payload.replies.every((reply) => reply.error);
+    const model = payload.replies.find((reply) => reply.model)?.model;
+    showStatus(failure ? payload.replies[0].error : model ? `三次请求已返回，模型 ${model}。` : "三次请求已返回。");
+  } catch (error) {
+    results.replaceChildren();
+    showStatus(error.message === "Failed to fetch" ? "没有连上本机服务。请先运行 node server.js，再打开 http://127.0.0.1:8765/ 。" : error.message);
+  } finally {
+    runButton.disabled = false;
+    runButton.textContent = previous;
+  }
+}
+
+function paint(outcome, options) {
   results.replaceChildren();
   for (const result of outcome.results) {
     const card = document.createElement("article");
@@ -163,4 +192,17 @@ function render(options = {}) {
   if (options.scroll) results.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-render();
+fetch("/api/health")
+  .then((response) => response.json())
+  .then((info) => {
+    if (!info.configured) {
+      bootError.hidden = false;
+      if (info.message) bootError.textContent = info.message;
+      return;
+    }
+    bootError.hidden = true;
+    showStatus(`已连接 ${info.model}。点生成后会发出三次请求。`);
+  })
+  .catch(() => {
+    bootError.hidden = false;
+  });

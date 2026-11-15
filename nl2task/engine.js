@@ -1,6 +1,5 @@
 // 步骤库来自 steps.yaml。API 库只收录这些步骤的 action_handler。
-// 参数照抄步骤，返回值照抄 writes。参数值从原话的槽位里取。
-// 匹配关键词是写死的。这里不调用真实接口，也不调用大模型。
+// 选哪些步骤、填哪些参数，由模型决定。程序只负责校验名称并展开成 API 列表。
 
 const stepSpecs = [
   {
@@ -269,111 +268,6 @@ const stepSpecs = [
   },
 ];
 
-const matchers = {
-  "region.create": {
-    when: "出现「新建 / 创建」并且提到 Region",
-    match(text) {
-      return /region/i.test(text) && /新建|创建/.test(text);
-    },
-  },
-  "region.adjust": {
-    when: "提到 Region 和边界，并且有「调整 / 扩大 / 缩小 / 扩到 / 缩到」",
-    match(text) {
-      return /region/i.test(text) && /边界/.test(text) && /调整|扩大|缩小|扩到|缩到|向外|向内/.test(text);
-    },
-  },
-  "region.weight_set": {
-    when: "提到 Region，并且用「设置 / 设为 / 改成 / 改为」说明权重",
-    match(text) {
-      return /region/i.test(text) && /权重/.test(text) && /设置|设为|改成|改为/.test(text);
-    },
-  },
-  "target.weight_set": {
-    when: "提到 Target，并且用「设置 / 设为 / 改成 / 改为」说明权重",
-    match(text) {
-      return /target/i.test(text) && /权重/.test(text) && /设置|设为|改成|改为/.test(text);
-    },
-  },
-  "plot.add": {
-    when: "提到 Plot，并且有「新增 / 加一个 / 添加」",
-    match(text) {
-      return /plot/i.test(text) && /新增|加一个|添加|加上/.test(text);
-    },
-  },
-  "loss.change": {
-    when: "提到损失函数",
-    match(text) {
-      return /损失函数/.test(text);
-    },
-  },
-  "optimizer.change": {
-    when: "提到优化器",
-    match(text) {
-      return /优化器/.test(text);
-    },
-  },
-  "optimizer.iteration_set": {
-    when: "提到迭代次数",
-    match(text) {
-      return /迭代/.test(text);
-    },
-  },
-  "param.boundary_set": {
-    when: "提到参数，并且有「边界 / 下界 / 上界」",
-    match(text) {
-      return /参数/.test(text) && /边界|下界|上界/.test(text) && !/传递|传到/.test(text);
-    },
-  },
-  "param.add": {
-    when: "提到增加待优化参数",
-    match(text) {
-      return /参数/.test(text) && /优化/.test(text) && /增加|添加|加入/.test(text);
-    },
-  },
-  "param.bin_enable": {
-    when: "提到 Bin",
-    match(text) {
-      return /bin/i.test(text);
-    },
-  },
-  "pr.run": {
-    when: "提到执行一轮 PR",
-    match(text) {
-      return /跑|执行|运行|做/.test(text) && /(?<![A-Za-z])PR(?![A-Za-z])/.test(text);
-    },
-  },
-  "ps.run": {
-    when: "提到执行一轮 PS",
-    match(text) {
-      return /跑|执行|运行|做/.test(text) && /(?<![A-Za-z])PS(?![A-Za-z])/.test(text);
-    },
-  },
-  "param.propagate": {
-    when: "提到把参数传到另一个流程",
-    match(text) {
-      return /参数/.test(text) && /流程/.test(text) && /传/.test(text) && !/point/i.test(text);
-    },
-  },
-  "data.interpolate": {
-    when: "提到插值",
-    match(text) {
-      return /插值/.test(text) && !/插值权重/.test(text);
-    },
-  },
-  "data.param_copy": {
-    when: "提到传递或复制 Point 的参数值",
-    match(text) {
-      return /point/i.test(text) && /参数/.test(text) && /传|拷|复制/.test(text);
-    },
-  },
-  "data.remove": {
-    when: "提到删除数据",
-    match(text) {
-      return /删除|删掉|去掉/.test(text) && /数据/.test(text);
-    },
-  },
-};
-
 const slotLabels = {
   curve: "曲线",
   region: "Region",
@@ -422,8 +316,6 @@ function parseRule(text) {
 }
 
 function buildAction(spec) {
-  const matcher = matchers[spec.id];
-  if (!matcher) throw new Error(`缺少匹配规则 ${spec.id}`);
   return {
     id: spec.action_handler,
     kind: "action",
@@ -444,8 +336,6 @@ function buildAction(spec) {
     })),
     returns: spec.writes.map((write) => ({ name: `${write.object}.${write.field}`, type: "field" })),
     rules: (spec.rules || []).map(parseRule),
-    relevant: matcher.match,
-    relevantReason: matcher.when,
   };
 }
 
@@ -455,158 +345,120 @@ if (apiLibrary.some((item) => !actionHandlers.has(item.id))) {
   throw new Error("API 库出现了步骤 action_handler 以外的名称");
 }
 
-const stepLibrary = stepSpecs.map((spec) => {
-  const matcher = matchers[spec.id];
-  return {
-    id: spec.id,
-    summary: spec.name,
-    when: matcher.when,
-    apis: [spec.action_handler],
-    match: matcher.match,
-    mappingStatus: spec.mapping_status,
-    allowedFlows: spec.allowed_flows,
-    changeClass: spec.change_class,
-    writes: spec.writes,
-    destructive: Boolean(spec.destructive),
-    confirmRequired: Boolean(spec.confirm_required),
-  };
-});
+const stepLibrary = stepSpecs.map((spec) => ({
+  id: spec.id,
+  summary: spec.name,
+  apis: [spec.action_handler],
+  mappingStatus: spec.mapping_status,
+  allowedFlows: spec.allowed_flows,
+  changeClass: spec.change_class,
+  writes: spec.writes,
+  destructive: Boolean(spec.destructive),
+  confirmRequired: Boolean(spec.confirm_required),
+}));
+
 
 function getApi(id) {
-  const found = apiLibrary.find((item) => item.id === id);
-  if (!found) throw new Error(`API 库中没有 ${id}`);
-  return found;
+  return apiLibrary.find((item) => item.id === id) || null;
 }
 
-function normalizeRange(value) {
-  return value.replace(/\s+/g, " ").trim();
+function getStep(id) {
+  return stepLibrary.find((item) => item.id === id) || null;
 }
 
-function lastNumber(text, pattern) {
-  const found = [...text.matchAll(pattern)];
-  return found.length ? found.at(-1)[1] : undefined;
+function paramType(param) {
+  return param.values.length ? `enum[${param.values.join("|")}]` : param.type;
 }
 
-function extractSlots(text) {
-  const slots = {};
-  const curve = text.match(/曲线\s*([A-Za-z][A-Za-z0-9_]*)/);
-  if (curve) slots.curve = curve[1];
-  const curveList = text.match(/曲线\s*([A-Za-z][A-Za-z0-9_]*(?:\s*[,，、]\s*[A-Za-z][A-Za-z0-9_]*)+)/);
-  if (curveList) slots.curves = curveList[1].replace(/\s+/g, "");
+function catalogForSteps() {
+  return stepLibrary
+    .map((step) => {
+      const params = getApi(step.apis[0])
+        .params.map((param) => `${param.name}: ${paramType(param)}${param.required ? "" : "?"}`)
+        .join(", ");
+      return `- ${step.id}（${step.summary}）参数 ${params}；mapping_status=${step.mappingStatus}；allowed_flows=${step.allowedFlows.join("、")}；展开为 ${step.apis[0]}`;
+    })
+    .join("\n");
+}
 
-  const region = text.match(/region\s*([A-Za-z][A-Za-z0-9_]*)/i);
-  if (region) slots.region = region[1];
+function catalogForApis() {
+  return apiLibrary
+    .map((item) => {
+      const args = item.params.map((param) => `${param.name}: ${paramType(param)}${param.required ? "" : "?"}`).join(", ");
+      const returns = item.returns.map((entry) => entry.name).join(", ");
+      return `- ${item.id}(${args}) -> ${returns}    ${item.summary}`;
+    })
+    .join("\n");
+}
 
-  const range = text.match(/范围\s*([0-9.]+\s*(?:到|至|-)\s*[0-9.]+)/);
-  if (range) slots.range = normalizeRange(range[1]);
-  const shifted = text.match(/(?:扩到|缩到)\s*([0-9.]+\s*(?:到|至|-)\s*[0-9.]+)/);
-  if (shifted) slots.new_range = normalizeRange(shifted[1]);
+const planSystem = [
+  "你把自然语言规划成步骤列表。只输出一个 JSON 对象，不要写解释。",
+  '格式：{"steps":[{"id":"步骤 id","params":{"参数名":"值"}}]}',
+  "规则：",
+  "1. id 只能来自用户消息里的步骤库。",
+  "2. 不要输出步骤库以外的 id。",
+  "3. params 只填原话里能够确定的值。确定不了就不要写这个参数。",
+  "4. 枚举参数只能使用给定的取值。",
+  '5. 如果原话和步骤库无关，输出 {"steps":[]}。',
+].join("\n");
 
-  const weight = lastNumber(text, /(?<!优化)权重\s*(?:设为|改为|改成|为|是|设成)?\s*([0-9.]+)/g);
-  if (weight) slots.weight = weight;
-  const optWeight = text.match(/优化权重\s*([0-9.]+)/);
-  if (optWeight) slots.opt_weight = optWeight[1];
+const codeSystem = [
+  "你把自然语言写成 API 调用。只输出一个 JSON 对象，不要写解释。",
+  '格式：{"calls":[{"api":"函数名","params":{"参数名":"值"}}]}',
+  "规则：",
+  "1. api 只能使用用户消息里 API 库中的函数名。",
+  "2. 不要调用库外函数，也不要发明解析函数。",
+  "3. params 只填原话里能够确定的值。",
+  "4. 枚举参数只能使用签名里给出的取值。",
+  '5. 如果原话和 API 库无关，输出 {"calls":[]}。',
+].join("\n");
 
-  if (/缩到|缩小|向内/.test(text)) slots.mode = "shrink";
-  else if (/扩到|扩大|向外/.test(text)) slots.mode = "expand";
+const presetSystem = [
+  "你在已经确认可以执行的流程里选择步骤。只输出一个 JSON 对象，不要写解释。",
+  '格式：{"steps":["步骤 id"]}',
+  "规则：",
+  "1. 只有 mapping_status 为 verified，并且 allowed_flows 不是「待确认」的步骤才能入选。",
+  "2. 不满足条件的步骤不要输出。",
+  '3. 如果没有可执行步骤，输出 {"steps":[]}。',
+].join("\n");
 
-  if (/已注册/.test(text) && /target/i.test(text)) slots.targets = "registered";
-  const targets = text.match(/target\s*([A-Za-z][A-Za-z0-9_]*(?:\s*[,，、]\s*[A-Za-z0-9_]+)*)/i);
-  if (targets) slots.targets = targets[1].replace(/\s+/g, "");
+function buildRequests(text) {
+  const utterance = text.trim() || "（空）";
+  const steps = catalogForSteps();
+  const apis = catalogForApis();
+  return [
+    { id: "plan", system: planSystem, user: `步骤库：\n${steps}\n\n用户原话：${utterance}` },
+    { id: "code", system: codeSystem, user: `API 库：\n${apis}\n\n用户原话：${utterance}` },
+    { id: "preset", system: presetSystem, user: `步骤状态：\n${steps}\n\n用户原话：${utterance}` },
+  ];
+}
 
-  const plotType = text.match(/plot\s*类型\s*([A-Za-z0-9_]+)/i);
-  if (plotType) slots.plot_type = plotType[1];
-  const plot = text.match(/plot\s*([A-Za-z][A-Za-z0-9_]*)/i);
-  if (plot && !/^类型$/i.test(plot[1])) slots.plot = plot[1];
-
-  const dataSource = text.match(/数据(?:来自|源为|源是|源)\s*([A-Za-z0-9_]+)/);
-  if (dataSource) slots.data_source = dataSource[1];
-
-  const loss = text.match(/损失函数\s*(?:换成|改为|改成|为|用)\s*([A-Za-z0-9_-]+)/);
-  if (loss) slots.loss = loss[1];
-
-  const flows = [...text.matchAll(/流程\s*([A-Za-z][A-Za-z0-9_]*)/g)].map((match) => match[1]);
-  if (flows[0]) slots.flow = flows[0];
-  if (flows[0] && flows[1]) {
-    slots.source_flow = flows[0];
-    slots.target_flow = flows[1];
+function parseModelJson(raw) {
+  if (raw === undefined || raw === null || !String(raw).trim()) {
+    return { ok: false, error: "模型没有返回内容", value: null };
   }
-
-  const optimizer = text.match(/优化器\s*(?:换成|改为|改成|为|用)\s*([A-Za-z][A-Za-z0-9_-]*)/);
-  if (optimizer) slots.optimizer = optimizer[1];
-  const insertAfter = text.match(/插在\s*([A-Za-z0-9_]+)\s*之后/);
-  if (insertAfter) slots.insert_after = insertAfter[1];
-  const iterations = text.match(/迭代\s*([0-9]+)\s*次/);
-  if (iterations) slots.iterations = iterations[1];
-
-  const parameterList = text.match(/参数\s*([A-Za-z][A-Za-z0-9_]*(?:\s*[,，、和]\s*[A-Za-z][A-Za-z0-9_]*)+)/);
-  if (parameterList) {
-    slots.parameters = parameterList[1].replace(/\s*(?:和|,|，|、)\s*/g, ",");
-    slots.parameter = slots.parameters.split(",")[0];
-  } else {
-    const parameter = text.match(/参数\s*([A-Za-z][A-Za-z0-9_]*)/);
-    if (parameter) {
-      slots.parameter = parameter[1];
-      slots.parameters = parameter[1];
+  let text = String(raw).trim();
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) text = fence[1].trim();
+  const attempt = (value) => {
+    try {
+      return { ok: true, value: JSON.parse(value) };
+    } catch (error) {
+      return { ok: false, error: `模型输出不是 JSON：${error.message}`, value: null };
     }
-  }
-  if (/全部参数|所有参数|full_set/.test(text)) slots.parameters = "full_set";
-  if (/当前参数/.test(text)) slots.parameters = "current";
-
-  const lower = text.match(/下界\s*(?:调到|设为|改为|为)?\s*(-?[0-9.]+)/);
-  if (lower) slots.lower = lower[1];
-  const upper = text.match(/上界\s*(?:调到|设为|改为|为)?\s*(-?[0-9.]+)/);
-  if (upper) slots.upper = upper[1];
-  if (/global/i.test(text)) slots.scope = "global";
-  else if (/local/i.test(text)) slots.scope = "local";
-
-  const bin = text.match(/bin\s*([A-Za-z0-9_]+)/i);
-  if (bin) slots.bin = bin[1];
-
-  if (/全部器件|所有器件/.test(text)) slots.devices = "all";
-  const deviceList = text.match(/器件\s*([A-Za-z][A-Za-z0-9_]*(?:\s*[,，、]\s*[A-Za-z][A-Za-z0-9_]*)+)/);
-  if (deviceList) slots.devices = deviceList[1].replace(/\s+/g, "");
-  const device = text.match(/器件\s*([A-Za-z][A-Za-z0-9_]*)/);
-  if (device) slots.device = device[1];
-
-  if (/精度/.test(text)) slots.objective = "accuracy";
-  else if (/单调/.test(text)) slots.objective = "monotonicity";
-  else if (/反趋势/.test(text)) slots.objective = "anti_trend";
-  else if (/线性/.test(text) && !/线性插值/.test(text)) slots.objective = "linearity";
-
-  if (/same_as_target|与\s*target\s*相同/i.test(text)) slots.interpolation_weight = "same_as_target";
-  const interpolationWeight = text.match(/插值权重\s*([0-9.]+)/);
-  if (interpolationWeight) slots.interpolation_weight = interpolationWeight[1];
-
-  if (/不含边界|不包括边界/.test(text)) slots.include_boundaries = "false";
-  else if (/包含边界|和边界|连同边界/.test(text)) slots.include_boundaries = "true";
-  if (/保留已有|保留现有/.test(text)) slots.overwrite = "preserve_existing";
-  else if (/覆盖已有|覆盖现有|覆盖/.test(text)) slots.overwrite = "replace_existing";
-
-  if (/全部\s*point|所有\s*point/i.test(text)) slots.points = "all";
-  else if (/缺失/.test(text) && /point/i.test(text)) slots.points = "missing";
-  if (/线性插值/.test(text)) slots.method = "linear";
-  const method = text.match(/插值方法\s*(?:为|用)?\s*([A-Za-z0-9_]+)/);
-  if (method) slots.method = method[1];
-
-  const sourcePoint = text.match(/point\s*([A-Za-z0-9_]+)/i);
-  if (sourcePoint && !/^(集合|参数)$/i.test(sourcePoint[1])) slots.source_point = sourcePoint[1];
-  if (/其他\s*point|别的\s*point/i.test(text)) slots.target_points = "others";
-
-  const temperature = text.match(/(-?[0-9.]+)\s*度/);
-  if (temperature) slots.temperature = temperature[1];
-  return slots;
+  };
+  const direct = attempt(text);
+  if (direct.ok) return direct;
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start >= 0 && end > start) return attempt(text.slice(start, end + 1));
+  return direct;
 }
 
-function describeSlots(slots) {
-  const entries = Object.entries(slots);
-  if (entries.length === 0) return "没有从原话里识别出参数值。";
-  return entries.map(([key, value]) => `${slotLabels[key] || key} = ${value}`).join("，");
-}
-
-function formatSlotValue(param, value) {
-  if (param.type === "number" || param.type === "integer" || param.type === "boolean") return String(value);
-  return `"${value}"`;
+function formatGiven(param, value) {
+  const text = typeof value === "string" ? value : String(value);
+  if (param.type === "number" || param.type === "integer" || param.type === "boolean") return text;
+  return `"${text}"`;
 }
 
 function applyRules(api, params) {
@@ -624,56 +476,43 @@ function applyRules(api, params) {
   return params;
 }
 
-function bindCall(apiId, previous, slots) {
-  const found = getApi(apiId);
-  const params = applyRules(
-    found,
-    found.params.map((param) => {
-      if (param.fill === "slot") {
-        const value = slots[param.slot];
-        if (value) {
-          return { name: param.name, value: formatSlotValue(param, value), source: "用户输入", missing: false };
-        }
-        const label = slotLabels[param.slot] || param.slot;
-        return {
-          name: param.name,
-          value: param.required ? "<缺失>" : "<未提供>",
-          source: param.required ? `用户输入里没有${label}` : `可选，用户输入里没有${label}`,
-          missing: param.required,
-        };
-      }
-      const producerIndex = previous.findIndex((call) => call.api === param.from.api);
-      if (producerIndex >= 0) {
-        return {
-          name: param.name,
-          value: `$${producerIndex + 1}.${param.from.field}`,
-          source: `第 ${producerIndex + 1} 步 ${param.from.api} 的 ${param.from.field}`,
-          missing: false,
-        };
-      }
+function bindParams(api, provided, extra) {
+  const source = provided && typeof provided === "object" ? provided : {};
+  const known = new Set(api.params.map((param) => param.name));
+  for (const name of Object.keys(source)) {
+    if (!known.has(name)) extra.push(`${api.id} 的参数 ${name} 不在签名里，已忽略`);
+  }
+  const params = api.params.map((param) => {
+    const raw = source[param.name];
+    const empty = raw === undefined || raw === null || String(raw).trim() === "";
+    const label = slotLabels[param.name] || param.name;
+    if (!empty && param.values.length && !param.values.includes(String(raw))) {
       return {
         name: param.name,
-        value: param.required ? "<缺失>" : "<未提供>",
-        source: `API 库要求来自 ${param.from.api}.${param.from.field}，这次列表里没有该调用`,
-        missing: param.required,
+        value: "<缺失>",
+        source: `模型给出的 ${raw} 不在枚举 ${param.values.join("、")} 内`,
+        missing: true,
       };
-    }),
-  );
-  return {
-    api: found.id,
-    summary: found.summary,
-    params,
-    confirmRequired: found.confirmRequired,
-    destructive: found.destructive,
-  };
+    }
+    if (!empty) return { name: param.name, value: formatGiven(param, raw), source: "模型从原话填写", missing: false };
+    return {
+      name: param.name,
+      value: param.required ? "<缺失>" : "<未提供>",
+      source: param.required ? `模型没有给出${label}` : `可选，模型没有给出${label}`,
+      missing: param.required,
+    };
+  });
+  return applyRules(api, params);
 }
 
-function expandSteps(steps, slots) {
-  const calls = [];
-  for (const step of steps) {
-    for (const apiId of step.apis) calls.push(bindCall(apiId, calls, slots));
-  }
-  return calls;
+function makeCall(api, provided, extra) {
+  return {
+    api: api.id,
+    summary: api.summary,
+    params: bindParams(api, provided, extra),
+    confirmRequired: api.confirmRequired,
+    destructive: api.destructive,
+  };
 }
 
 function formatCall(call, index) {
@@ -686,90 +525,14 @@ function formatList(calls) {
   return calls.map((call, index) => formatCall(call, index + 1)).join("\n");
 }
 
-function formatSignatures() {
-  return apiLibrary
-    .map((item) => {
-      const args = item.params
-        .map((param) => {
-          const type = param.values.length ? `enum[${param.values.join("|")}]` : param.type;
-          return `${param.name}: ${type}${param.required ? "" : "?"}`;
-        })
-        .join(", ");
-      const returns = item.returns.map((entry) => entry.name).join(", ");
-      return `${item.id}(${args}) -> ${returns}    ${item.summary}`;
-    })
-    .join("\n");
-}
-
-function closeProducers(selectedIds, slots) {
-  const selected = new Set(selectedIds);
-  const reasons = [];
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const id of [...selected]) {
-      for (const param of getApi(id).params) {
-        if (param.fill !== "output" || selected.has(param.from.api)) continue;
-        const named = Boolean(slots[param.slot]);
-        if (!param.required && !named) continue;
-        selected.add(param.from.api);
-        reasons.push(
-          `${id} 的参数 ${param.name} 需要 ${param.from.api}.${param.from.field}，因此在代码里补上 ${param.from.api}`,
-        );
-        changed = true;
-      }
-    }
-  }
-  return { ids: topological(selected), reasons };
-}
-
-function topological(selected) {
-  const ids = [...selected];
-  const incoming = new Map(ids.map((id) => [id, 0]));
-  const next = new Map(ids.map((id) => [id, []]));
-  for (const id of ids) {
-    for (const param of getApi(id).params) {
-      if (param.fill === "output" && selected.has(param.from.api) && param.from.api !== id) {
-        next.get(param.from.api).push(id);
-        incoming.set(id, incoming.get(id) + 1);
-      }
-    }
-  }
-  const ready = ids
-    .filter((id) => incoming.get(id) === 0)
-    .sort((a, b) => apiLibrary.findIndex((item) => item.id === a) - apiLibrary.findIndex((item) => item.id === b));
-  const ordered = [];
-  while (ready.length > 0) {
-    const id = ready.shift();
-    ordered.push(id);
-    for (const child of next.get(id)) {
-      incoming.set(child, incoming.get(child) - 1);
-      if (incoming.get(child) === 0) {
-        ready.push(child);
-        ready.sort(
-          (a, b) => apiLibrary.findIndex((item) => item.id === a) - apiLibrary.findIndex((item) => item.id === b),
-        );
-      }
-    }
-  }
-  return ordered;
-}
-
 function toCode(calls) {
   if (calls.length === 0) return "# 没有生成调用";
   return calls
     .map((call, index) => {
-      const args = call.params.map((param) => `${param.name}=${codeValue(param)}`).join(", ");
+      const args = call.params.map((param) => `${param.name}=${param.value === "<缺失>" || param.value === "<未提供>" ? `"${param.value}"` : param.value}`).join(", ");
       return `step${index + 1} = ${call.api}(${args})`;
     })
     .join("\n");
-}
-
-function codeValue(param) {
-  if (param.value === "<缺失>" || param.value === "<未提供>") return `"${param.value}"`;
-  const match = param.value.match(/^\$(\d+)\.(.+)$/);
-  if (!match) return param.value;
-  return `step${match[1]}.${match[2]}`;
 }
 
 function writeConflicts(steps) {
@@ -785,116 +548,149 @@ function writeConflicts(steps) {
   return lines;
 }
 
-function runPlan(text) {
-  const slots = extractSlots(text);
-  const picked = stepLibrary.filter((step) => step.match(text, slots));
-  const calls = expandSteps(picked, slots);
-  const taskLines =
-    picked.length === 0
-      ? "没有步骤被选中。"
-      : picked.map((step, index) => `${index + 1}. ${step.id}：${step.summary}`).join("\n");
-  const expansion =
-    picked.length === 0
-      ? "没有可展开的步骤。"
-      : picked.map((step) => `${step.id} → ${step.apis.join(" → ")}`).join("\n");
-  const conflicts = writeConflicts(picked);
+function modelStage(reply) {
+  if (!reply) return "没有收到模型响应。";
+  if (reply.error) return reply.error;
+  return reply.text && String(reply.text).trim() ? String(reply.text) : "模型没有返回内容。";
+}
+
+function realizePlan(_text, reply) {
+  const title = "先规划列表，再展开";
+  const summary = "模型从步骤库里选步骤并填写参数。程序只展开选中步骤的 action_handler，库外步骤会被丢掉。";
+  if (!reply || reply.error) {
+    return { id: "plan", title, summary, stages: [{ title: "1. 模型调用", body: modelStage(reply) }], calls: [], text: formatList([]) };
+  }
+  const parsed = parseModelJson(reply.text);
+  const notes = [];
+  const accepted = [];
+  const calls = [];
+  if (!parsed.ok) notes.push(parsed.error);
+  const steps = parsed.ok && Array.isArray(parsed.value.steps) ? parsed.value.steps : [];
+  if (parsed.ok && !Array.isArray(parsed.value.steps)) notes.push("模型输出里没有 steps 数组。");
+  for (const entry of steps) {
+    const id = typeof entry === "string" ? entry : entry && entry.id;
+    const provided = entry && typeof entry === "object" ? entry.params : {};
+    const step = getStep(id);
+    if (!step) {
+      notes.push(`模型给出了库外步骤 ${id || "（空）"}，已丢弃`);
+      continue;
+    }
+    accepted.push(step);
+    calls.push(makeCall(getApi(step.apis[0]), provided, notes));
+  }
+  const conflicts = writeConflicts(accepted);
   return {
     id: "plan",
-    title: "先规划列表，再展开",
-    summary: "先选出步骤，再展开成它的 action_handler。参数直接使用原话里识别出的值。",
+    title,
+    summary,
     stages: [
-      { title: "1. 规划出的步骤列表", body: taskLines },
-      { title: "2. 用步骤库展开成 API", body: expansion },
-      { title: "3. 按 API 库填写参数", body: formatList(calls) },
-      {
-        title: "4. 按 writes 检查改动冲突",
-        body: conflicts.length === 0 ? "选中的步骤没有写同一个字段。" : conflicts.join("\n"),
-      },
+      { title: "1. 模型原文", body: modelStage(reply) },
+      { title: "2. 名称校验", body: notes.length ? notes.join("\n") : "给出的步骤都在步骤库里。" },
+      { title: "3. 展开成 API", body: formatList(calls) },
+      { title: "4. 按 writes 检查改动冲突", body: conflicts.length ? conflicts.join("\n") : "选中的步骤没有写同一个字段。" },
     ],
     calls,
     text: formatList(calls),
   };
 }
 
-function runCode(text) {
-  const slots = extractSlots(text);
-  const actions = apiLibrary.filter((item) => item.kind === "action");
-  const judged = actions.map((item) => ({ item, hit: item.relevant(text, slots) }));
-  const initial = judged.filter((entry) => entry.hit).map((entry) => entry.item.id);
-  const closed = closeProducers(initial, slots);
+function realizeCode(_text, reply) {
+  const title = "先生成调用代码，再抽出列表";
+  const summary = "模型按 API 库写调用。程序核对函数名必须是 action_handler，库外名称会被丢掉。";
+  if (!reply || reply.error) {
+    return { id: "code", title, summary, stages: [{ title: "1. 模型调用", body: modelStage(reply) }], calls: [], text: formatList([]) };
+  }
+  const parsed = parseModelJson(reply.text);
+  const notes = [];
   const calls = [];
-  for (const id of closed.ids) calls.push(bindCall(id, calls, slots));
-  const retrieval = judged
-    .map((entry) => `${entry.hit ? "选用" : "跳过"}  ${entry.item.id}    ${entry.item.relevantReason}`)
-    .join("\n");
-  const pickedSteps = stepLibrary.filter((step) => initial.includes(step.apis[0]));
-  const conflicts = writeConflicts(pickedSteps);
-  const check =
-    calls.length === 0
-      ? "没有调用需要检查。"
-      : calls.map((call) => `${call.api}：是步骤库中的 action_handler`).join("\n");
+  const steps = [];
+  if (!parsed.ok) notes.push(parsed.error);
+  const items = parsed.ok && Array.isArray(parsed.value.calls) ? parsed.value.calls : [];
+  if (parsed.ok && !Array.isArray(parsed.value.calls)) notes.push("模型输出里没有 calls 数组。");
+  for (const entry of items) {
+    const id = entry && entry.api;
+    const api = getApi(id);
+    if (!api) {
+      notes.push(`模型给出了库外 API ${id || "（空）"}，已丢弃`);
+      continue;
+    }
+    const step = stepLibrary.find((item) => item.apis[0] === api.id);
+    if (step) steps.push(step);
+    calls.push(makeCall(api, entry.params, notes));
+  }
+  const conflicts = writeConflicts(steps);
+  const check = calls.length === 0 ? "没有保留下来的调用。" : calls.map((call) => `${call.api}：是步骤库中的 action_handler`).join("\n");
   return {
     id: "code",
-    title: "先生成调用代码，再抽出列表",
-    summary: "先按原话挑选 action_handler，再生成调用代码。库里没有这些名称以外的接口，所以不会另补调用。",
+    title,
+    summary,
     stages: [
-      { title: "1. 在 API 库里挑选", body: retrieval },
-      {
-        title: "2. 检查要不要补上游调用",
-        body: closed.reasons.length === 0 ? "API 库里没有 action_handler 以外的接口，没有可补的调用。" : closed.reasons.join("\n"),
-      },
+      { title: "1. 模型原文", body: modelStage(reply) },
+      { title: "2. 名称校验", body: notes.length ? notes.join("\n") : "给出的函数名都在 API 库里。" },
       { title: "3. 生成的代码", body: toCode(calls) },
       { title: "4. 对照 API 库做静态检查", body: check },
-      {
-        title: "5. 按 writes 检查改动冲突",
-        body: conflicts.length === 0 ? "选中的步骤没有写同一个字段。" : conflicts.join("\n"),
-      },
+      { title: "5. 按 writes 检查改动冲突", body: conflicts.length ? conflicts.join("\n") : "选中的步骤没有写同一个字段。" },
     ],
     calls,
     text: formatList(calls),
   };
 }
 
-function runPreset(text) {
-  const slots = extractSlots(text);
-  const picked = stepLibrary.filter((step) => step.match(text, slots));
-  const hit =
-    picked.length === 0
-      ? "原话没有命中步骤。"
-      : picked
-          .map(
-            (step) =>
-              `${step.id}：${step.summary}\nmapping_status=${step.mappingStatus}\nallowed_flows=${step.allowedFlows.join("、")}`,
-          )
-          .join("\n\n");
-  const decision =
-    picked.length === 0
-      ? "没有命中的步骤。API 列表为空。"
-      : "allowed_flows 和 mapping_status 未补齐前，步骤不能进入 executable 方案。上面命中的步骤两项都还没补，API 列表为空。";
+function executable(step) {
+  return step.mappingStatus === "verified" && step.allowedFlows.some((flow) => flow && flow !== "待确认");
+}
+
+function realizePreset(_text, reply) {
+  const title = "按预先写好的流程展开";
+  const summary = "模型只能在 mapping_status 已核对、allowed_flows 已确认的步骤里选。这份库两项都还没补，所以列表为空。";
+  if (!reply || reply.error) {
+    return { id: "preset", title, summary, stages: [{ title: "1. 模型调用", body: modelStage(reply) }], calls: [], text: formatList([]) };
+  }
+  const parsed = parseModelJson(reply.text);
+  const chosen = [];
+  if (!parsed.ok) chosen.push(parsed.error);
+  const steps = parsed.ok && Array.isArray(parsed.value.steps) ? parsed.value.steps : [];
+  if (parsed.ok && !Array.isArray(parsed.value.steps)) chosen.push("模型输出里没有 steps 数组。");
+  const calls = [];
+  const accepted = [];
+  if (steps.length === 0 && parsed.ok) chosen.push("模型没有选出步骤。");
+  for (const entry of steps) {
+    const id = typeof entry === "string" ? entry : entry && entry.id;
+    const step = getStep(id);
+    if (!step) {
+      chosen.push(`模型给出了库外步骤 ${id || "（空）"}，已丢弃`);
+      continue;
+    }
+    if (!executable(step)) {
+      chosen.push(`${step.id}：mapping_status=${step.mappingStatus}，allowed_flows=${step.allowedFlows.join("、")}。不能进入 executable 方案。`);
+      continue;
+    }
+    accepted.push(step);
+    const provided = entry && typeof entry === "object" ? entry.params : {};
+    calls.push(makeCall(getApi(step.apis[0]), provided, chosen));
+  }
+  if (calls.length === 0) chosen.push("API 列表为空。");
   return {
     id: "preset",
-    title: "按预先写好的流程展开",
-    summary: "只展开 allowed_flows 已确认、并且 mapping_status 已核对的步骤。这份库里还没有这样的步骤。",
+    title,
+    summary,
     stages: [
-      { title: "1. 原话命中的步骤", body: hit },
-      { title: "2. 能否进入 executable 方案", body: decision },
+      { title: "1. 模型原文", body: modelStage(reply) },
+      { title: "2. 能否进入 executable 方案", body: chosen.join("\n") },
     ],
-    calls: [],
-    text: formatList([]),
+    calls,
+    text: formatList(calls),
   };
 }
 
-function runAll(text) {
-  const normalized = text.trim();
-  const slots = extractSlots(normalized);
+function realize(text, replies) {
+  const byId = new Map((replies || []).map((reply) => [reply.id, reply]));
   return {
-    slots,
-    slotText: describeSlots(slots),
-    results: [runPlan(normalized), runCode(normalized), runPreset(normalized)],
-    signatures: formatSignatures(),
+    requests: buildRequests(text),
+    results: [realizePlan(text, byId.get("plan")), realizeCode(text, byId.get("code")), realizePreset(text, byId.get("preset"))],
   };
 }
 
-const api = { apiLibrary, stepLibrary, runAll };
+const api = { apiLibrary, stepLibrary, buildRequests, parseModelJson, realize };
 globalThis.NL2Task = api;
 if (typeof module !== "undefined" && module.exports) module.exports = api;
