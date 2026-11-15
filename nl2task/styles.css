@@ -1,0 +1,104 @@
+:root {
+  color: #1c1917;
+  background: #f4f1ea;
+  font-family: "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  line-height: 1.5;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; }
+
+main {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 32px 20px 64px;
+}
+
+h1 { font-size: 28px; margin: 0 0 8px; }
+h2 { font-size: 16px; margin: 0 0 6px; }
+h3 { font-size: 15px; margin: 0; }
+
+header p, .hint { color: #57534e; margin: 0; }
+
+.libraries, .results {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.results { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+article, .ask, .slots, .result {
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.ask { margin-top: 16px; }
+
+.boot-error {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+}
+
+label { display: block; font-weight: 600; margin-bottom: 8px; }
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+
+button, .examples button {
+  border: 1px solid #d6d3d1;
+  background: #fff;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+
+#run {
+  background: #1c1917;
+  color: #fff;
+  border-color: #1c1917;
+  border-radius: 6px;
+}
+
+ul { list-style: none; padding: 0; margin: 12px 0 0; }
+.libraries ul { max-height: 320px; overflow: auto; padding-right: 8px; }
+li + li { margin-top: 10px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+.sig, pre {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.slots { margin-top: 16px; }
+.slots strong { margin-right: 8px; }
+
+.result header p { color: #57534e; font-size: 13px; margin: 4px 0 0; }
+.stage { margin-top: 12px; }
+.stage h3 { font-size: 13px; }
+.calls { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+.calls th, .calls td { border-top: 1px solid #e7e5e4; text-align: left; vertical-align: top; padding: 6px 4px; }
+.missing { color: #9f1239; }
+
+@media (max-width: 960px) {
+  .libraries, .results { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>自然语言到 API 列表</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>自然语言到 API 列表</h1>
+        <p>
+          步骤库用的是 steps.yaml。API 库只收录这些步骤的 action_handler。点生成后，三种方案各向模型发一次请求。程序只保留库里有的名称，并停在 API 列表。
+        </p>
+      </header>
+
+      <p id="boot-error" class="boot-error">
+        模型调用由本机服务转发。在 nl2task 目录先设置 LLM_API_KEY 和 LLM_BASE_URL，再执行 node server.js 8876（端口自己定），然后打开启动时打印的地址。只双击这个网页不会发出请求。密钥放在环境变量里，不要写进文件。
+      </p>
+
+      <section class="ask">
+        <label for="nl">只输入自然语言</label>
+        <textarea id="nl" rows="3">在曲线 IdVg 上新建 Region R1，范围 0 到 1，权重 2</textarea>
+        <div class="examples" id="examples"></div>
+        <button id="run" type="button">生成</button>
+      </section>
+
+      <section id="slots" class="slots" hidden></section>
+      <section id="results" class="results"></section>
+
+      <section class="libraries">
+        <article>
+          <h2 id="steps-heading">步骤库</h2>
+          <p class="hint">内容来自 steps.yaml。每一步只展开自己的 action_handler。</p>
+          <ul id="steps"></ul>
+        </article>
+        <article>
+          <h2 id="apis-heading">API 库</h2>
+          <p class="hint">名称只来自步骤的 action_handler。参数照抄步骤，值来自原话。</p>
+          <ul id="apis"></ul>
+        </article>
+      </section>
+    </main>
+    <script src="./engine.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

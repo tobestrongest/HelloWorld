@@ -1,0 +1,209 @@
+schema_version: "0.2"
+status: draft
+notes:
+  - allowed_flows 和 mapping_status 未补齐前，步骤不能进入 executable 方案。
+  - writes.object 使用 steps.args 中的参数名，供改动冲突检查和参数来源追踪。
+  - parameter_set_ref 支持 current、full_set 或参数引用列表；device_set_ref 支持 all 或 Device 引用列表。
+  - point_set_ref 支持 all、范围引用或 Point 引用列表；target_set_ref 支持 Target 引用列表或已注册 Target 集合。
+  - weight_rule 支持数值或 same_as_target。
+steps:
+  - id: region.create
+    name: 新建 Region
+    params:
+      curve: {type: curve_ref, required: true}
+      region: {type: region_ref, required: true}
+      range: {type: range_ref, required: true}
+      weight: {type: number, required: true}
+    action_handler: region_create
+    mapping_status: unverified
+    writes: [{object: region, field: existence}, {object: region, field: range}, {object: region, field: weight}]
+    allowed_flows: [待确认]
+    change_class: structure
+  - id: region.adjust
+    name: 调整已有 Region 边界
+    params:
+      curve: {type: curve_ref, required: true}
+      region: {type: region_ref, required: true}
+      new_range: {type: range_ref, required: true}
+      mode: {type: enum, values: [expand, shrink], required: true}
+    action_handler: region_adjust
+    mapping_status: unverified
+    writes: [{object: region, field: range}]
+    allowed_flows: [待确认]
+    change_class: structure
+  - id: region.weight_set
+    name: 设置 Region 权重
+    params:
+      curve: {type: curve_ref, required: true}
+      region: {type: region_ref, required: true}
+      weight: {type: number, required: true}
+    action_handler: region_weight_change
+    mapping_status: unverified
+    writes: [{object: region, field: weight}]
+    allowed_flows: [待确认]
+    change_class: weight
+  - id: target.weight_set
+    name: 设置一组 Target 的权重
+    params:
+      targets: {type: target_set_ref, required: true}
+      weight: {type: number, required: true}
+    action_handler: target_weight_change
+    mapping_status: unverified
+    writes: [{object: targets, field: weight}]
+    allowed_flows: [待确认]
+    change_class: weight
+  - id: plot.add
+    name: 新增参与优化的 Plot
+    params:
+      plot_type: {type: plot_type_ref, required: true}
+      data_source: {type: data_ref, required: true}
+      curve: {type: curve_ref, required: true}
+      region: {type: range_ref, required: false}
+    action_handler: plot_add
+    mapping_status: unverified
+    writes: [{object: curve, field: plots}]
+    allowed_flows: [待确认]
+    change_class: structure
+  - id: loss.change
+    name: 更换已注册损失函数
+    params:
+      plot: {type: plot_ref, required: true}
+      region: {type: region_ref, required: false}
+      loss: {type: loss_ref, required: true}
+    action_handler: loss_change
+    mapping_status: unverified
+    writes: [{object: plot, field: loss}]
+    allowed_flows: [待确认]
+    change_class: loss
+  - id: optimizer.change
+    name: 更换优化器或插入全局优化
+    params:
+      flow: {type: flow_ref, required: true}
+      optimizer: {type: optimizer_ref, required: true}
+      insert_after: {type: flow_step_ref, required: false}
+    action_handler: optimizer_change
+    mapping_status: unverified
+    writes: [{object: flow, field: optimizer}]
+    allowed_flows: [待确认]
+    change_class: optimizer
+  - id: optimizer.iteration_set
+    name: 设置优化迭代次数
+    params:
+      flow: {type: flow_ref, required: true}
+      iterations: {type: integer, required: true}
+    action_handler: optimizer_iteration_set
+    mapping_status: unverified
+    writes: [{object: flow, field: iteration_limit}]
+    allowed_flows: [待确认]
+    change_class: optimizer
+  - id: param.boundary_set
+    name: 调整单个参数边界
+    params:
+      parameter: {type: parameter_ref, required: true}
+      lower: {type: number, required: false}
+      upper: {type: number, required: false}
+      scope: {type: optimization_scope_ref, required: true}
+    rules: [at_least_one(lower, upper)]
+    action_handler: param_boundary_set
+    mapping_status: unverified
+    writes: [{object: parameter, field: boundary}]
+    allowed_flows: [待确认]
+    change_class: parameter
+  - id: param.add
+    name: 增加待优化参数
+    params:
+      flow: {type: flow_ref, required: true}
+      parameters: {type: parameter_set_ref, required: true}
+    action_handler: param_add
+    mapping_status: unverified
+    writes: [{object: flow, field: tunable_parameters}]
+    allowed_flows: [待确认]
+    change_class: parameter
+  - id: param.bin_enable
+    name: 对 Global 参数开 Bin
+    params:
+      flow: {type: flow_ref, required: true}
+      parameters: {type: parameter_set_ref, required: true}
+      bin: {type: bin_ref, required: true}
+    action_handler: param_bin_enable
+    mapping_status: unverified
+    writes: [{object: parameters, field: bin_mode}]
+    allowed_flows: [待确认]
+    change_class: parameter
+  - id: pr.run
+    name: 执行一轮 PR
+    params:
+      flow: {type: flow_ref, required: true}
+      opt_weight: {type: number, required: true}
+      parameters: {type: parameter_set_ref, required: true}
+      devices: {type: device_set_ref, required: false}
+    action_handler: pr_run
+    mapping_status: unverified
+    writes: [{object: parameters, field: values}, {object: devices, field: parameter_trend}]
+    allowed_flows: [待确认]
+    change_class: optimization
+  - id: ps.run
+    name: 执行一轮 PS
+    params:
+      flow: {type: flow_ref, required: true}
+      objective: {type: enum, values: [accuracy, linearity, monotonicity, anti_trend], required: true}
+      targets: {type: target_set_ref, required: true}
+      parameters: {type: parameter_set_ref, required: true}
+      devices: {type: device_set_ref, required: false}
+      interpolation_weight: {type: weight_rule, required: false}
+    action_handler: ps_run
+    mapping_status: unverified
+    writes: [{object: targets, field: values}, {object: targets, field: trend}]
+    allowed_flows: [待确认]
+    change_class: optimization
+  - id: param.propagate
+    name: 传递参数与边界
+    params:
+      source_flow: {type: flow_ref, required: true}
+      target_flow: {type: flow_ref, required: true}
+      parameters: {type: parameter_set_ref, required: true}
+      include_boundaries: {type: boolean, required: true}
+      source_device: {type: device_ref, required: false}
+      target_devices: {type: device_set_ref, required: false}
+      overwrite: {type: enum, values: [preserve_existing, replace_existing], required: true}
+    action_handler: param_propagate
+    mapping_status: unverified
+    writes: [{object: target_flow, field: parameters}, {object: target_flow, field: parameter_boundaries}]
+    allowed_flows: [待确认]
+    change_class: parameter
+  - id: data.interpolate
+    name: 对缺失 Point 插值赋值
+    params:
+      curve: {type: curve_ref, required: true}
+      points: {type: point_set_ref, required: true}
+      method: {type: interpolation_method_ref, required: true}
+    action_handler: data_interpolate
+    mapping_status: unverified
+    writes: [{object: points, field: measured_values}]
+    allowed_flows: [待确认]
+    change_class: data
+  - id: data.param_copy
+    name: 传递 Point 参数值
+    params:
+      source_point: {type: point_ref, required: true}
+      target_points: {type: point_set_ref, required: true}
+      parameters: {type: parameter_set_ref, required: true}
+    action_handler: data_param_copy
+    mapping_status: unverified
+    writes: [{object: target_points, field: parameter_values}]
+    allowed_flows: [待确认]
+    change_class: data
+  - id: data.remove
+    name: 删除指定异常数据
+    params:
+      device: {type: device_ref, required: true}
+      temperature: {type: temperature_point, required: true}
+      curves: {type: curve_ref_list, required: true}
+      points: {type: point_set_ref, required: true}
+    action_handler: data_remove
+    mapping_status: unverified
+    writes: [{object: points, field: fitting_membership}]
+    allowed_flows: [待确认]
+    change_class: data
+    destructive: true
+    confirm_required: true
