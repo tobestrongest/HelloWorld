@@ -11,7 +11,7 @@
       <header>
         <h1>自然语言到 API 列表</h1>
         <p>
-          步骤库用的是 steps.yaml。API 库按其中的 action_handler、参数和 writes 生成，引用类型再生成解析 API。同一句话走三种方案，程序停在 API 列表，不发真实请求。步骤是否命中靠写死的关键词。
+          步骤库用的是 steps.yaml。API 库只收录这些步骤的 action_handler。同一句话走三种方案，程序停在 API 列表，不发真实请求。步骤是否命中靠写死的关键词。
         </p>
       </header>
 
@@ -37,7 +37,7 @@
         </article>
         <article>
           <h2 id="apis-heading">API 库</h2>
-          <p class="hint">动作 API 照抄步骤。引用参数改为取解析 API 的返回值，字面量来自原话。</p>
+          <p class="hint">名称只来自步骤的 action_handler。参数照抄步骤，值来自原话。</p>
           <ul id="apis"></ul>
         </article>
       </section>

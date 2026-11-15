@@ -1,8 +1,6 @@
-// 步骤库来自 steps.yaml。API 库按这份文件生成，规则有三条：
-// 1. 每个步骤生成一个动作 API，id 用 action_handler，参数照抄，返回值照抄 writes。
-// 2. 参数类型是引用时，再生成一个解析 API。动作 API 的这个参数改为取解析 API 的返回值。
-// 3. 数值、枚举、布尔、温度这些字面量仍从原话的槽位里取。
-// 匹配关键词是写死的，用来把三种方案的差异固定下来。这里不调用真实接口，也不调用大模型。
+// 步骤库来自 steps.yaml。API 库只收录这些步骤的 action_handler。
+// 参数照抄步骤，返回值照抄 writes。参数值从原话的槽位里取。
+// 匹配关键词是写死的。这里不调用真实接口，也不调用大模型。
 
 const stepSpecs = [
   {
@@ -415,53 +413,7 @@ const slotLabels = {
   device: "器件",
   temperature: "温度",
   curves: "曲线列表",
-  plot_region: "Plot 使用的范围",
 };
-
-const resolvers = [];
-const resolverById = new Map();
-
-function isRef(type) {
-  return type.endsWith("_ref") || type.endsWith("_ref_list");
-}
-
-function slotKey(param) {
-  if (param.name === "region" && param.type === "range_ref") return "plot_region";
-  return param.name;
-}
-
-function resolverId(param) {
-  if (param.name === "region" && param.type === "range_ref") return "region_range_resolve";
-  return `${param.name}_resolve`;
-}
-
-function returnField(param) {
-  const many = param.type.includes("_set_") || param.type.endsWith("_list");
-  return `${param.name}_${many ? "ids" : "id"}`;
-}
-
-function ensureResolver(param) {
-  const id = resolverId(param);
-  const existing = resolverById.get(id);
-  if (existing) return existing;
-  const field = returnField(param);
-  const slot = slotKey(param);
-  const resolver = {
-    id,
-    kind: "resolve",
-    summary: `${slotLabels[slot] || param.name}（${param.type}）`,
-    params: [{ name: "name", type: "string", required: true, fill: "slot", slot, values: [] }],
-    returns: [{ name: field, type: param.type }],
-    rules: [],
-    relevant() {
-      return false;
-    },
-    relevantReason: "由引用类型生成。原话不直接选它，代码方案在动作 API 需要这个参数时补上",
-  };
-  resolverById.set(id, resolver);
-  resolvers.push(resolver);
-  return resolver;
-}
 
 function parseRule(text) {
   const match = text.match(/^at_least_one\((.+)\)$/);
@@ -482,22 +434,14 @@ function buildAction(spec) {
     destructive: Boolean(spec.destructive),
     confirmRequired: Boolean(spec.confirm_required),
     writes: spec.writes,
-    params: spec.params.map((param) => {
-      const base = {
-        name: param.name,
-        type: param.type,
-        required: param.required,
-        values: param.values || [],
-      };
-      if (!isRef(param.type)) return { ...base, fill: "slot", slot: param.name };
-      const resolver = ensureResolver(param);
-      return {
-        ...base,
-        fill: "output",
-        from: { api: resolver.id, field: resolver.returns[0].name },
-        slot: slotKey(param),
-      };
-    }),
+    params: spec.params.map((param) => ({
+      name: param.name,
+      type: param.type,
+      required: param.required,
+      values: param.values || [],
+      fill: "slot",
+      slot: param.name,
+    })),
     returns: spec.writes.map((write) => ({ name: `${write.object}.${write.field}`, type: "field" })),
     rules: (spec.rules || []).map(parseRule),
     relevant: matcher.match,
@@ -505,8 +449,11 @@ function buildAction(spec) {
   };
 }
 
-const actionApis = stepSpecs.map(buildAction);
-const apiLibrary = [...resolvers, ...actionApis];
+const apiLibrary = stepSpecs.map(buildAction);
+const actionHandlers = new Set(stepSpecs.map((spec) => spec.action_handler));
+if (apiLibrary.some((item) => !actionHandlers.has(item.id))) {
+  throw new Error("API 库出现了步骤 action_handler 以外的名称");
+}
 
 const stepLibrary = stepSpecs.map((spec) => {
   const matcher = matchers[spec.id];
@@ -854,7 +801,7 @@ function runPlan(text) {
   return {
     id: "plan",
     title: "先规划列表，再展开",
-    summary: "先选出步骤，再按步骤库展开成动作 API。解析 API 不在步骤里，引用参数因此保持缺失。",
+    summary: "先选出步骤，再展开成它的 action_handler。参数直接使用原话里识别出的值。",
     stages: [
       { title: "1. 规划出的步骤列表", body: taskLines },
       { title: "2. 用步骤库展开成 API", body: expansion },
@@ -885,16 +832,16 @@ function runCode(text) {
   const check =
     calls.length === 0
       ? "没有调用需要检查。"
-      : calls.map((call) => `${call.api}：在 API 库中`).join("\n");
+      : calls.map((call) => `${call.api}：是步骤库中的 action_handler`).join("\n");
   return {
     id: "code",
     title: "先生成调用代码，再抽出列表",
-    summary: "先按原话挑选动作 API，再把引用参数依赖的解析调用补进列表。数值和枚举仍只来自原话。",
+    summary: "先按原话挑选 action_handler，再生成调用代码。库里没有这些名称以外的接口，所以不会另补调用。",
     stages: [
-      { title: "1. 在动作 API 里挑选", body: retrieval },
+      { title: "1. 在 API 库里挑选", body: retrieval },
       {
-        title: "2. 为引用参数补上解析调用",
-        body: closed.reasons.length === 0 ? "没有需要补的调用。" : closed.reasons.join("\n"),
+        title: "2. 检查要不要补上游调用",
+        body: closed.reasons.length === 0 ? "API 库里没有 action_handler 以外的接口，没有可补的调用。" : closed.reasons.join("\n"),
       },
       { title: "3. 生成的代码", body: toCode(calls) },
       { title: "4. 对照 API 库做静态检查", body: check },

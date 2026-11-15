@@ -23,9 +23,7 @@ const slots = document.querySelector("#slots");
 const results = document.querySelector("#results");
 
 document.querySelector("#steps-heading").textContent = `步骤库（${bench.stepLibrary.length}）`;
-const resolveCount = bench.apiLibrary.filter((item) => item.kind === "resolve").length;
-const actionCount = bench.apiLibrary.length - resolveCount;
-document.querySelector("#apis-heading").textContent = `API 库（动作 ${actionCount}，解析 ${resolveCount}）`;
+document.querySelector("#apis-heading").textContent = `API 库（${bench.apiLibrary.length}）`;
 
 for (const step of bench.stepLibrary) {
   const item = document.createElement("li");
