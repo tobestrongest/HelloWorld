@@ -1,7 +1,7 @@
 // 模拟的步骤库、API 库，以及三种“自然语言 → API 列表”的过程。
 // 这里不调用真实接口，也不调用大模型。匹配规则是写死的，用来把三种方案的差异稳定地演示出来。
 
-export const apiLibrary = [
+const apiLibrary = [
   {
     id: "search_artist",
     summary: "按名字搜索歌手",
@@ -118,7 +118,7 @@ export const apiLibrary = [
   },
 ];
 
-export const stepLibrary = [
+const stepLibrary = [
   {
     id: "find_artist",
     summary: "根据名字查找歌手",
@@ -175,7 +175,7 @@ export const stepLibrary = [
   },
 ];
 
-export const workflows = [
+const workflows = [
   {
     id: "playlist_of_top_tracks",
     summary: "创建歌单，并放入某歌手的热门歌曲",
@@ -230,19 +230,19 @@ const slotLabels = {
   album: "专辑名",
 };
 
-export function getApi(id) {
+function getApi(id) {
   const api = apiLibrary.find((item) => item.id === id);
   if (!api) throw new Error(`API 库中没有 ${id}`);
   return api;
 }
 
-export function getStep(id) {
+function getStep(id) {
   const step = stepLibrary.find((item) => item.id === id);
   if (!step) throw new Error(`步骤库中没有 ${id}`);
   return step;
 }
 
-export function extractSlots(text) {
+function extractSlots(text) {
   const slots = {};
   const playlist = text.match(/叫\s*[「“"'《]?(.+?)[」”"'》]?\s*的歌单/);
   if (playlist) slots.playlistName = playlist[1].trim();
@@ -260,7 +260,7 @@ export function extractSlots(text) {
   return slots;
 }
 
-export function describeSlots(slots) {
+function describeSlots(slots) {
   const entries = Object.entries(slots);
   if (entries.length === 0) return "没有从原话里识别出歌手、歌单名或专辑名。";
   return entries.map(([key, value]) => `${slotLabels[key]} = ${value}`).join("，");
@@ -313,12 +313,12 @@ function expandSteps(steps, slots) {
   return calls;
 }
 
-export function formatCall(call, index) {
+function formatCall(call, index) {
   const args = call.params.map((param) => `${param.name}=${param.value}`).join(", ");
   return `${index}. ${call.api}(${args})`;
 }
 
-export function formatList(calls) {
+function formatList(calls) {
   if (calls.length === 0) return "（空列表）";
   return calls.map((call, index) => formatCall(call, index + 1)).join("\n");
 }
@@ -405,7 +405,7 @@ function codeValue(param) {
   return `step${match[1]}.${match[2]}`;
 }
 
-export function runPlan(text) {
+function runPlan(text) {
   const slots = extractSlots(text);
   const picked = stepLibrary.filter((step) => step.match(text, slots));
   const calls = expandSteps(picked, slots);
@@ -431,7 +431,7 @@ export function runPlan(text) {
   };
 }
 
-export function runCode(text) {
+function runCode(text) {
   const slots = extractSlots(text);
   const judged = apiLibrary.map((api) => ({
     api,
@@ -468,7 +468,7 @@ export function runCode(text) {
   };
 }
 
-export function runPreset(text) {
+function runPreset(text) {
   const slots = extractSlots(text);
   const ranked = workflows
     .map((workflow) => ({ workflow, score: workflow.score(text, slots) }))
@@ -515,7 +515,7 @@ export function runPreset(text) {
   };
 }
 
-export function runAll(text) {
+function runAll(text) {
   const normalized = text.trim();
   return {
     slots: extractSlots(normalized),
@@ -524,3 +524,7 @@ export function runAll(text) {
     signatures: formatSignatures(),
   };
 }
+
+const api = { apiLibrary, stepLibrary, runAll };
+globalThis.NL2Task = api;
+if (typeof module !== "undefined" && module.exports) module.exports = api;

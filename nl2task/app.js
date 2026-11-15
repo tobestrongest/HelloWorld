@@ -1,4 +1,4 @@
-import { apiLibrary, runAll, stepLibrary } from "./engine.js";
+const bench = globalThis.NL2Task;
 
 const examples = [
   "建一个叫 Love Coldplay 的歌单，放入 Coldplay 最热门的歌",
@@ -16,7 +16,7 @@ const exampleBox = document.querySelector("#examples");
 const slots = document.querySelector("#slots");
 const results = document.querySelector("#results");
 
-for (const step of stepLibrary) {
+for (const step of bench.stepLibrary) {
   const item = document.createElement("li");
   const title = document.createElement("code");
   title.textContent = step.id;
@@ -29,7 +29,7 @@ for (const step of stepLibrary) {
   steps.append(item);
 }
 
-for (const api of apiLibrary) {
+for (const api of bench.apiLibrary) {
   const item = document.createElement("li");
   const title = document.createElement("code");
   const args = api.params.map((param) => `${param.name}: ${param.type}${param.required ? "" : "?"}`).join(", ");
@@ -69,7 +69,7 @@ input.addEventListener("keydown", (event) => {
 });
 
 function render() {
-  const outcome = runAll(input.value);
+  const outcome = bench.runAll(input.value);
   slots.hidden = false;
   slots.replaceChildren();
   const label = document.createElement("strong");

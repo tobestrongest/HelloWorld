@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { runAll } from "./engine.js";
+import { createRequire } from "node:module";
+
+const { runAll } = createRequire(import.meta.url)("./engine.js");
 
 function ids(result) {
   return result.calls.map((call) => call.api);
