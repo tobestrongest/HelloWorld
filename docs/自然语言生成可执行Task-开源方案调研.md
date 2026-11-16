@@ -40,6 +40,8 @@ HuggingGPT、LLMCompiler 是已停更的论文代码，TaskWeaver 已归档。�
 
 用大模型调度 Hugging Face 上的各类 AI 模型，完成图像、语音、文本混合的任务。
 
+![HuggingGPT：一次规划，再按依赖执行](diagrams/hugginggpt.png)
+
 **要解决的问题。** 一个通用大模型做不了检测、识别、画图这些专门任务。HuggingGPT 的目的是：用户说一句话，把 Hugging Face 上已经有的专家模型串起来完成它。它调度的是 AI 模型，不是业务 HTTP 接口。
 
 **输入与输出。** 输入是用户的自然语言，以及请求里提到的图片、音频路径。给用户的输出是一段回答，加上中间生成的文件。规划阶段还有一份中间产物：JSON 任务列表。
@@ -92,6 +94,8 @@ HuggingGPT、LLMCompiler 是已停更的论文代码，TaskWeaver 已归档。�
 约 1.9k star，MIT，ICML 2024 论文代码，2024 年 7 月后未更新。
 
 把规划当成编译：模型写出函数调用序列，程序分析依赖后并行执行。
+
+![LLMCompiler：一次写出调用，程序并行执行](diagrams/llmcompiler.png)
 
 **要解决的问题。** 一个问题要调用好几个工具时，如果每调用一次都等模型再想下一步，延迟和费用都高。LLMCompiler 的目的是一次把该调的函数都排出来，互相不依赖的同时执行。
 
@@ -146,6 +150,8 @@ Desert's area magnified by 52%, which one covers more ground?
 约 6.2k star，MIT，微软，2026 年 3 月已归档。
 
 代码优先的 agent 框架，主要面向数据分析任务。
+
+![TaskWeaver：先拆步骤，再写成插件代码](diagrams/taskweaver.png)
 
 **要解决的问题。** 数据分析的中间结果是表格。用纯文本在模型和程序之间传来传去，表的结构会丢。TaskWeaver 的目的是让模型写 Python 来调用用户自己的函数，并在一次会话里记住已经算出来的数据。
 
@@ -214,6 +220,8 @@ returns:
 
 在《我的世界》游戏里持续学习新技能的 agent，核心贡献是一个会自动增长的技能库。
 
+![Voyager：检索旧技能，写成新函数，成功才入库](diagrams/voyager.png)
+
 **要解决的问题。** 在《我的世界》里，每件新事情都从头写控制代码，已经会的动作无法复用。Voyager 的目的是让 agent 自己把做成的事情存成技能，下次遇到类似任务先检索再组合。
 
 **输入与输出。** 终身学习时，输入是当前游戏状态，要学什么由自动课程提出。给定具体任务时，输入是一句任务描述，例如“做一把钻石镐”。输出是一段可执行的 JavaScript 函数；成功后连同一段文字描述写入技能库，并在游戏里做出对应行为。
@@ -256,6 +264,8 @@ returns:
 规范约 490 star，仍在更新。arazzo-engine 约 70 star，2026 年 6 月后未更新。Apache-2.0。
 
 OpenAPI 组织发布的官方规范，用 YAML 描述跨一个或多个 API 的多步调用流程。arazzo-engine 是配套的开源执行器和生成器。
+
+![Arazzo：流程事先写成文件，运行时不调用模型](diagrams/arazzo.png)
 
 **要解决的问题。** OpenAPI 只描述单个 HTTP 接口，不描述“先登录、再拿 token、再查列表”这种跨接口的顺序。Arazzo 的目的是把这种顺序写成一份可以反复执行的文件。
 
@@ -345,6 +355,8 @@ agent-sop 约 1.2k star，Apache-2.0。anthropics/skills 约 19 万 star。两�
 
 两个相近的开放格式：用 Markdown 写分步流程，agent 运行时读取并自行调用工具完成。Agent SOP 来自 AWS，Agent Skills 来自 Anthropic。
 
+![Agent SOP / Skills：人写流程，模型按文档调用工具](diagrams/sop.png)
+
 **要解决的问题。** 同一类复杂工作，如果每次都让 agent 临场决定步骤，结果不稳定，也难交给别人复用。这两套格式的目的是把做法写成一份人能改的流程文档，让 agent 按文档做。
 
 **输入与输出。** 输入是用户请求，以及被选中的那份流程文档。输出是宿主 agent 调用自己的工具之后得到的结果。格式本身不产生一份可以脱离模型重放的 Task 文件。
@@ -408,6 +420,8 @@ agent-sop 约 1.2k star，Apache-2.0。anthropics/skills 约 19 万 star。两�
 
 输入是用户请求和这些 REST 接口的文档。输出是一条调用轨迹和最终回答。事先准备的是这批接口文档、训练检索模型用的数据，以及按搜索轨迹微调好的 ToolLLaMA。技术上，API Retriever 先取出相关接口，DFSDT 用深度优先尝试一条路径，失败就回退，决策由 ToolLLaMA 做。没有步骤库。优点是大规模接口检索有现成的方案和数据。缺点是检索模型需要训练数据，搜索过程模型调用多。
 
+![ToolBench：先检索，再换路搜索调用路径](diagrams/toolbench.png)
+
 ## 四、横向对比
 
 | 项目 | 产物能否事先审查 | 能否中途调整 | 分支和循环 | 模型调用量 | 步骤库 | 维护状态 |
@@ -441,6 +455,6 @@ agent-sop 约 1.2k star，Apache-2.0。anthropics/skills 约 19 万 star。两�
 
 ## 说明
 
-调研方法：HuggingGPT、LLMCompiler、TaskWeaver、Voyager 阅读了源码和提示词；Arazzo、arazzo-engine、Agent SOP、Agent Skills、ToolBench 依据官方规范、文档、示例和部分源码。
+调研方法：HuggingGPT、LLMCompiler、TaskWeaver、Voyager 阅读了源码和提示词；Arazzo、arazzo-engine、Agent SOP、Agent Skills、ToolBench 依据官方规范、文档、示例和部分源码。各项目的流程图放在 `docs/diagrams/`，并插在对应小节开头。Agent SOP 与 Agent Skills、Arazzo 规范与 arazzo-engine 各画成一张，因为文档里它们共用一条执行路径。
 
 各项目的优缺点是结合我们的目标做出的判断，不是项目方的自我评价。第五部分是初步建议，尚未经过原型验证。
